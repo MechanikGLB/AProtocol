@@ -13,7 +13,7 @@ static const int BodySize = BlockSize - HeaderSize;
 
 bool lstEnabled = true;
 bool dfgEnabled = true;
-std::mutex blocks_mutex;
+std::mutex swap_mutex;
 
 #pragma pack(push, 1)
 struct Block {
@@ -24,11 +24,13 @@ struct Block {
 };
 #pragma pack(pop)
 
-std::vector<Block> blocks;
+std::vector<Block> blocksA;
+std::vector<Block> blocksB;
+std::vector<Block> *buffs[2] = { &blocksA, &blocksB }; ;
 
-void listener(int sockfd, bool &IsEnabled);
+void listener(int sockfd,std::vector<Block> *BBuf[], bool &IsEnabled);
 void defragmentator_NT(Block block, std::ofstream &out);
-void defragmentator(std::vector<Block> &blocks, bool &IsEnabled);
+void defragmentator(std::vector<Block> *blocks[], bool &IsEnabled);
 
 int main() {
     MAIN_STARTUP();
@@ -52,8 +54,8 @@ int main() {
     std::cout << "Entering listening" << std::endl;
     //listener(sockfd, lstEnabled);
 
-    std::thread lstr(listener, sockfd, std::ref(lstEnabled));
-    std::thread defr(defragmentator, std::ref(blocks), std::ref(dfgEnabled));
+    std::thread lstr(listener, sockfd, std::ref(buffs), std::ref(lstEnabled));
+    std::thread defr(defragmentator, std::ref(buffs), std::ref(dfgEnabled));
 
     std::cout << "Нажмите Enter для остановки..." << std::endl;
     std::cin.get();
@@ -71,7 +73,7 @@ int main() {
     return 0;
 }
 
-void listener(int sockfd, bool &IsEnabled) {
+void listener(int sockfd,std::vector<Block> *BBuf[], bool &IsEnabled) {
 
     std::cout << "Entered" << std::endl;
     struct sockaddr_in client_addr;
@@ -83,7 +85,7 @@ void listener(int sockfd, bool &IsEnabled) {
 
     while (IsEnabled) {
 
-        std::cout << "Enabled and working" << std::endl;
+        //std::cout << "Enabled and working" << std::endl;
         int n = recvfrom(sockfd, buffer, BlockSize, 0,
                         (struct sockaddr*)&client_addr, &client_len);
         
@@ -91,15 +93,21 @@ void listener(int sockfd, bool &IsEnabled) {
         std::cout << "Пакет #" << packet_count << ", размер: " << n << " байт" << std::endl;
 
         if (n == BlockSize || n == 15 || true) {
-            std::cout << "Something recieved" << std::endl;
+            //std::cout << "Something recieved" << std::endl;
             Block block;
             memcpy(&block, buffer, BlockSize);
+            
+            BBuf[0]->push_back(block);
+            
+            //std::cout << "Got packet of size " << n << " byte" << std::endl ;
             {
-                std::lock_guard<std::mutex> lock(blocks_mutex);
-                blocks.push_back(block);
+                std::lock_guard<std::mutex> lock(swap_mutex);
+                if (packet_count % 1000 == 0){
+                    std::swap(BBuf[0],BBuf[1]);
+                }
             }
-            std::cout << "Got packet of size " << n << " byte" << std::endl ;
         }
+        
     }
     
 }
@@ -115,7 +123,7 @@ void defragmentator_NT(Block block, std::ofstream &out){
     }
 }
 
-void defragmentator(std::vector<Block> &blocks, bool &IsEnabled){
+void defragmentator(std::vector<Block> *blocks[], bool &IsEnabled){
     //для помещения в поток
     int packNumber = 0;
     
@@ -128,10 +136,9 @@ void defragmentator(std::vector<Block> &blocks, bool &IsEnabled){
             std::vector<Block> blocksToWrite;
 
             {
-            std::lock_guard<std::mutex> lock(blocks_mutex);
-                if (!blocks.empty()) {
-                    blocksToWrite = blocks; 
-                    blocks.clear();          
+            std::lock_guard<std::mutex> lock(swap_mutex);
+                if (!blocks[1]->empty()) {
+                    blocksToWrite.swap(*blocks[1]);          
                 }
             }   
 
