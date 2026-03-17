@@ -17,9 +17,9 @@ std::mutex swap_mutex;
 
 #pragma pack(push, 1)
 struct Block {
-    unsigned int block_count : 8;
+    unsigned int block_count : 16;
     int is_last : 1;
-    int padding : 23;
+    int padding : 15;
     char body[BodySize];
 };
 #pragma pack(pop)
@@ -54,8 +54,8 @@ int main() {
     std::cout << "Entering listening" << std::endl;
     //listener(sockfd, lstEnabled);
 
-    std::thread lstr(listener, sockfd, std::ref(buffs), std::ref(lstEnabled));
-    std::thread defr(defragmentator, std::ref(buffs), std::ref(dfgEnabled));
+    std::thread lstr(listener, sockfd, buffs, std::ref(lstEnabled));
+    std::thread defr(defragmentator, buffs, std::ref(dfgEnabled));
 
     std::cout << "Нажмите Enter для остановки..." << std::endl;
     std::cin.get();
@@ -90,19 +90,21 @@ void listener(int sockfd,std::vector<Block> *BBuf[], bool &IsEnabled) {
                         (struct sockaddr*)&client_addr, &client_len);
         
         packet_count++;
-        std::cout << "Пакет #" << packet_count << ", размер: " << n << " байт" << std::endl;
+        
 
         if (n == BlockSize || n == 15 || true) {
             //std::cout << "Something recieved" << std::endl;
             Block block;
             memcpy(&block, buffer, BlockSize);
             
+            std::cout << "Packet #" << packet_count << " got ____ count #" << block.block_count << std::endl;
+
             BBuf[0]->push_back(block);
             
             //std::cout << "Got packet of size " << n << " byte" << std::endl ;
             {
-                std::lock_guard<std::mutex> lock(swap_mutex);
-                if (packet_count % 1000 == 0){
+                if (packet_count % 1000 == 0 || block.is_last){
+                    std::lock_guard<std::mutex> lock(swap_mutex);
                     std::swap(BBuf[0],BBuf[1]);
                 }
             }
@@ -136,8 +138,8 @@ void defragmentator(std::vector<Block> *blocks[], bool &IsEnabled){
             std::vector<Block> blocksToWrite;
 
             {
-            std::lock_guard<std::mutex> lock(swap_mutex);
                 if (!blocks[1]->empty()) {
+                    std::lock_guard<std::mutex> lock(swap_mutex);
                     blocksToWrite.swap(*blocks[1]);          
                 }
             }   
