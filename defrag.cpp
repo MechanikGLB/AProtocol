@@ -120,7 +120,7 @@ void defragmentator(std::vector<Block> &blocks, bool &IsEnabled){
     int packNumber = 0;
     
     std::ofstream out;
-    out.open("output.txt");
+    out.open("recieved.txt");
     std::cout << "File opened successfully" << std::endl;
     if(out.is_open()){
         while(IsEnabled){
