@@ -1,10 +1,8 @@
 #include <iostream>
 #include <fstream>
 #include <cstring>
-#include <arpa/inet.h>
-#include <sys/socket.h>
-#include <unistd.h>
 #include <vector>
+#include "oursockets.h"
 //#include <thread>
 
 static const int PORT = 8888;
@@ -31,9 +29,11 @@ void defragmentator(Block block);
 void defragmentator(std::vector<Block> &blocks, bool &IsEnabled);
 
 int main() {
+    MAIN_STARTUP();
     int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
     if (sockfd < 0) {
-        std::cerr << "Ошибка создания сокета" << std::endl;
+        // std::cerr << "Ошибка создания сокета" << std::endl;
+        std::cerr << "Error creating socket" << std::endl;
         return 1;
     }
     
@@ -43,15 +43,21 @@ int main() {
     server_addr.sin_port = htons(PORT);
     
     if (bind(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
-        std::cerr << "Ошибка привязки сокета к порту " << PORT << std::endl;
+        // std::cerr << "Ошибка привязки сокета к порту " << PORT << std::endl;
+        std::cerr << "Error binding socket to port" << PORT << std::endl;
         close(sockfd);
         return 1;
     }
     
-    std::cout << "заходим в прослушивание" << std::endl;
-    listener(sockfd, lstEnabled);
+    // std::cout << "заходим в прослушивание" << std::endl;
+    std::cout << "Entering listening" << std::endl;
+    while (true) {
+        lstEnabled = true;
+        listener(sockfd, lstEnabled);
+    }
 
-    std::cout << "выход из программы" << std::endl;
+    // std::cout << "выход из программы" << std::endl;
+    std::cout << "Exit out of program" << std::endl;
     // std::thread lstr(listener, {sockfd, lstEnabled});
     // std::thread defr(defragmentator, {blocks, dfgEnabled});
     //TODO: Потоки не работают
@@ -65,26 +71,31 @@ int main() {
     // lstr.join();
     
     close(sockfd);
+    MAIN_CLEANEUP();
     return 0;
 }
 
 void listener(int sockfd, bool &IsEnabled) {
-    std::cout << "зашли" << std::endl;
+    // std::cout << "зашли" << std::endl;
+    std::cout << "Entered" << std::endl;
     struct sockaddr_in client_addr;
     socklen_t client_len = sizeof(client_addr);
     char buffer[BlockSize];
     
     while (IsEnabled) {
-        std::cout << "включен и работает" << std::endl;
+        // std::cout << "включен и работает" << std::endl;
+        std::cout << "Enabled and working" << std::endl;
         int n = recvfrom(sockfd, buffer, BlockSize, 0,
                         (struct sockaddr*)&client_addr, &client_len);
         
-        if (n == BlockSize || n == 15) {
-            std::cout << "чёто пришло" << std::endl;
-            Block block;
+        if (n == BlockSize) {
+            //std::cout << "чёто пришло" << std::endl;
+            std::cout << "Something recieved" << std::endl;
+                       Block block;
             memcpy(&block, buffer, BlockSize);
             blocks.push_back(block);
-            std::cout << "Пришёл пакет размером " << n << " байт" << std::endl;
+            //std::cout << "Пришёл пакет размером " << n << " байт" << std::endl;
+            std::cout << "Got packet of size " << n << " byte" << std::endl;
             defragmentator(block);
         }
     }
@@ -98,11 +109,13 @@ void defragmentator(Block block){
 
     if(out.is_open()){
         out << block.body;
-        std::cout << "Записано в файл: " << block.body << std::endl;
+        //std::cout << "Записано в файл: " << block.body << std::endl;
+        std::cout << "Wrote to file: " << block.body << std::endl;
         out.close();
         lstEnabled = false;
     } else {
-        std::cerr << "Ошибка открытия файла" << std::endl;
+        //std::cerr << "Ошибка открытия файла" << std::endl;
+        std::cerr << "Error opening file" << std::endl;
     }
 }
 
@@ -112,7 +125,8 @@ void defragmentator(std::vector<Block> &blocks, bool &IsEnabled){
     
     std::ofstream out;
     out.open("output.txt");
-    std::cout << "Файл успешно открыт" << std::endl;
+    //std::cout << "Файл успешно открыт" << std::endl;
+    std::cout << "File opened successfully" << std::endl;
     if(out.is_open()){
         while(IsEnabled){
             if (blocks.size() > 0){
@@ -127,6 +141,7 @@ void defragmentator(std::vector<Block> &blocks, bool &IsEnabled){
         }
         out.close();
     } else {
-        std::cerr << "Ошибка открытия файла" << std::endl;
+        //std::cerr << "Ошибка открытия файла" << std::endl;
+        std::cerr << "Error opening file" << std::endl;
     }
 }
