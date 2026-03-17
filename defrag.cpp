@@ -117,23 +117,30 @@ void defragmentator_NT(Block block, std::ofstream &out){
 
 void defragmentator(std::vector<Block> &blocks, bool &IsEnabled){
     //для помещения в поток
-    int packNumber;
+    int packNumber = 0;
     
     std::ofstream out;
     out.open("output.txt");
     std::cout << "File opened successfully" << std::endl;
     if(out.is_open()){
         while(IsEnabled){
-            if (blocks.size() > 0){
-                for(int i = 0; i < blocks.size(); i++){
-                    Block curBlock = *blocks.begin();
-                    if (curBlock.block_count > packNumber){
-                        packNumber = curBlock.block_count;
-                        out << curBlock.body;
-                        std::cout << "Wrote to file: " << curBlock.body << std::endl;
-                    }
+
+            std::vector<Block> blocksToWrite;
+
+            {
+            std::lock_guard<std::mutex> lock(blocks_mutex);
+                if (!blocks.empty()) {
+                    blocksToWrite = blocks; 
+                    blocks.clear();          
                 }
+            }   
+
+            for (const auto& block : blocksToWrite) {
+                out.write(block.body, BodySize);
+                out.flush();
+                std::cout << "Wrote block #" << (int)block.block_count << std::endl;
             }
+
         }
         out.close();
     } else {
